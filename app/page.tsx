@@ -1025,17 +1025,19 @@ Please provide:
 
             {generatedPolicy && (
               <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4 max-h-[50vh] overflow-hidden">
+                <div className="grid grid-cols-2 gap-4 h-[55vh]">
                   {/* Policy Draft */}
                   <div className="border border-gray-200 rounded-lg overflow-hidden flex flex-col">
                     <div className="bg-gray-50 border-b border-gray-200 p-3">
                       <h3 className="text-sm font-semibold text-gray-900">Policy Draft</h3>
                     </div>
-                    <ScrollArea className="flex-1 p-4">
-                      <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                        {generatedPolicy.draft}
-                      </div>
-                    </ScrollArea>
+                    <div className="flex-1 overflow-hidden">
+                      <ScrollArea className="h-full w-full p-4">
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap pr-4">
+                          {generatedPolicy.draft}
+                        </div>
+                      </ScrollArea>
+                    </div>
                   </div>
 
                   {/* Compliance Report */}
@@ -1043,112 +1045,116 @@ Please provide:
                     <div className="bg-gray-50 border-b border-gray-200 p-3">
                       <h3 className="text-sm font-semibold text-gray-900">Compliance Analysis</h3>
                     </div>
-                    <ScrollArea className="flex-1 p-4 space-y-3">
-                      {generatedPolicy.compliance ? (
-                        <div className="space-y-4">
-                          {/* Try different compliance data structures */}
-                          {generatedPolicy.compliance.compliance_issues &&
-                          Array.isArray(generatedPolicy.compliance.compliance_issues) &&
-                          generatedPolicy.compliance.compliance_issues.length > 0 ? (
-                            <div className="space-y-3">
-                              {generatedPolicy.compliance.compliance_issues.map((issue: any, idx: number) => {
-                                const severityColor = issue.severity === 'Critical'
-                                  ? { border: '#EF4444', bg: '#FEE2E2', icon: 'red' }
-                                  : issue.severity === 'Warning'
-                                  ? { border: '#F59E0B', bg: '#FEF3C7', icon: 'amber' }
-                                  : { border: '#10B981', bg: '#ECFDF5', icon: 'green' }
+                    <div className="flex-1 overflow-hidden">
+                      <ScrollArea className="h-full w-full p-4">
+                        <div className="space-y-4 pr-4">
+                          {generatedPolicy.compliance ? (
+                            <>
+                              {/* Try different compliance data structures */}
+                              {generatedPolicy.compliance.compliance_issues &&
+                              Array.isArray(generatedPolicy.compliance.compliance_issues) &&
+                              generatedPolicy.compliance.compliance_issues.length > 0 ? (
+                                <div className="space-y-3">
+                                  {generatedPolicy.compliance.compliance_issues.map((issue: any, idx: number) => {
+                                    const severityColor = issue.severity === 'Critical'
+                                      ? { border: '#EF4444', bg: '#FEE2E2', icon: 'red' }
+                                      : issue.severity === 'Warning'
+                                      ? { border: '#F59E0B', bg: '#FEF3C7', icon: 'amber' }
+                                      : { border: '#10B981', bg: '#ECFDF5', icon: 'green' }
 
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="p-3 rounded-lg border"
-                                    style={{ borderColor: severityColor.border, backgroundColor: severityColor.bg }}
-                                  >
-                                    <div className="flex items-start gap-2">
-                                      {severityColor.icon === 'red' ? (
-                                        <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
-                                      ) : severityColor.icon === 'amber' ? (
-                                        <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                                      ) : (
-                                        <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-semibold text-gray-900">
-                                          {issue.issue || issue.title}
-                                        </p>
-                                        {issue.jurisdiction && (
-                                          <p className="text-xs text-gray-600 mt-0.5">
-                                            Jurisdiction: {issue.jurisdiction}
-                                          </p>
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="p-3 rounded-lg border"
+                                        style={{ borderColor: severityColor.border, backgroundColor: severityColor.bg }}
+                                      >
+                                        <div className="flex items-start gap-2">
+                                          {severityColor.icon === 'red' ? (
+                                            <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                          ) : severityColor.icon === 'amber' ? (
+                                            <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                          ) : (
+                                            <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-semibold text-gray-900">
+                                              {issue.issue || issue.title}
+                                            </p>
+                                            {issue.jurisdiction && (
+                                              <p className="text-xs text-gray-600 mt-0.5">
+                                                Jurisdiction: {issue.jurisdiction}
+                                              </p>
+                                            )}
+                                            {issue.recommendation && (
+                                              <p className="text-xs text-gray-700 mt-1">
+                                                {issue.recommendation}
+                                              </p>
+                                            )}
+                                            {issue.regulatory_reference && (
+                                              <p className="text-xs text-gray-600 mt-1 italic">
+                                                Ref: {issue.regulatory_reference}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ) : generatedPolicy.compliance.result?.findings ? (
+                                <div className="space-y-3">
+                                  {generatedPolicy.compliance.result.findings.map((finding: any, idx: number) => (
+                                    <div
+                                      key={idx}
+                                      className="p-3 rounded-lg border"
+                                      style={{
+                                        borderColor:
+                                          finding.severity === 'high'
+                                            ? '#EF4444'
+                                            : finding.severity === 'medium'
+                                            ? '#F59E0B'
+                                            : '#10B981',
+                                        backgroundColor:
+                                          finding.severity === 'high'
+                                            ? '#FEE2E2'
+                                            : finding.severity === 'medium'
+                                            ? '#FEF3C7'
+                                            : '#ECFDF5',
+                                      }}
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        {finding.severity === 'high' ? (
+                                          <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                        ) : finding.severity === 'medium' ? (
+                                          <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                        ) : (
+                                          <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
                                         )}
-                                        {issue.recommendation && (
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-semibold text-gray-900">
+                                            {finding.title}
+                                          </p>
                                           <p className="text-xs text-gray-700 mt-1">
-                                            {issue.recommendation}
+                                            {finding.description}
                                           </p>
-                                        )}
-                                        {issue.regulatory_reference && (
-                                          <p className="text-xs text-gray-600 mt-1 italic">
-                                            Ref: {issue.regulatory_reference}
-                                          </p>
-                                        )}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          ) : generatedPolicy.compliance.result?.findings ? (
-                            <div className="space-y-3">
-                              {generatedPolicy.compliance.result.findings.map((finding: any, idx: number) => (
-                                <div
-                                  key={idx}
-                                  className="p-3 rounded-lg border"
-                                  style={{
-                                    borderColor:
-                                      finding.severity === 'high'
-                                        ? '#EF4444'
-                                        : finding.severity === 'medium'
-                                        ? '#F59E0B'
-                                        : '#10B981',
-                                    backgroundColor:
-                                      finding.severity === 'high'
-                                        ? '#FEE2E2'
-                                        : finding.severity === 'medium'
-                                        ? '#FEF3C7'
-                                        : '#ECFDF5',
-                                  }}
-                                >
-                                  <div className="flex items-start gap-2">
-                                    {finding.severity === 'high' ? (
-                                      <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
-                                    ) : finding.severity === 'medium' ? (
-                                      <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                                    ) : (
-                                      <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-semibold text-gray-900">
-                                        {finding.title}
-                                      </p>
-                                      <p className="text-xs text-gray-700 mt-1">
-                                        {finding.description}
-                                      </p>
-                                    </div>
-                                  </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
+                              ) : (
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900 mb-2">Compliance Summary</p>
+                                  <p className="text-xs text-gray-700">{JSON.stringify(generatedPolicy.compliance, null, 2).slice(0, 200)}</p>
+                                </div>
+                              )}
+                            </>
                           ) : (
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 mb-2">Compliance Summary</p>
-                              <p className="text-xs text-gray-700">{JSON.stringify(generatedPolicy.compliance, null, 2).slice(0, 200)}</p>
-                            </div>
+                            <p className="text-sm text-gray-500">No compliance findings available</p>
                           )}
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">No compliance findings available</p>
-                      )}
-                    </ScrollArea>
+                      </ScrollArea>
+                    </div>
                   </div>
                 </div>
 
@@ -1165,22 +1171,68 @@ Please provide:
                   </Button>
                   <Button
                     onClick={() => {
-                      const content = `${generatedPolicy.draft}`
-                      const blob = new Blob([content], { type: 'text/plain' })
-                      const url = window.URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `${formData.title.replace(/\s+/g, '_')}.txt`
-                      document.body.appendChild(a)
-                      a.click()
-                      document.body.removeChild(a)
-                      window.URL.revokeObjectURL(url)
+                      try {
+                        // Create a simple HTML document and print to PDF
+                        const htmlContent = `
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <meta charset="UTF-8">
+                            <title>${formData.title}</title>
+                            <style>
+                              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 40px; }
+                              h1 { color: #1E3A5F; margin-bottom: 10px; border-bottom: 3px solid #1E3A5F; padding-bottom: 10px; }
+                              .metadata { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 14px; }
+                              .metadata p { margin: 5px 0; }
+                              .content { white-space: pre-wrap; word-wrap: break-word; }
+                              .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+                            </style>
+                          </head>
+                          <body>
+                            <h1>${formData.title}</h1>
+                            <div class="metadata">
+                              <p><strong>Effective Date:</strong> ${formData.effectiveDate}</p>
+                              <p><strong>Department:</strong> ${formData.department}</p>
+                              <p><strong>Category:</strong> ${formData.category}</p>
+                              <p><strong>Jurisdictions:</strong> ${formData.jurisdictions.join(', ')}</p>
+                            </div>
+                            <div class="content">${generatedPolicy.draft.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                            <div class="footer">
+                              <p>Generated on ${new Date().toLocaleDateString()}</p>
+                            </div>
+                          </body>
+                          </html>
+                        `
+
+                        const blob = new Blob([htmlContent], { type: 'text/html' })
+                        const url = window.URL.createObjectURL(blob)
+                        const link = document.createElement('a')
+                        link.href = url
+                        link.download = `${formData.title.replace(/\s+/g, '_')}_${new Date().getTime()}.html`
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                        window.URL.revokeObjectURL(url)
+                      } catch (error) {
+                        console.error('Export failed:', error)
+                        // Fallback to text export
+                        const content = `${formData.title}\n\n${generatedPolicy.draft}`
+                        const blob = new Blob([content], { type: 'text/plain' })
+                        const url = window.URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `${formData.title.replace(/\s+/g, '_')}.txt`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                        window.URL.revokeObjectURL(url)
+                      }
                     }}
                     variant="outline"
                     className="gap-2"
                   >
                     <Download size={16} />
-                    Export PDF
+                    Export
                   </Button>
                   <Button
                     onClick={handleSaveDraft}
