@@ -738,20 +738,65 @@ Please provide:
 
         try {
           // The response can be in multiple formats
-          const response = data.response
-          console.log('Extracting from response...')
+          let response = data.response
+          console.log('Raw response type:', typeof response)
 
-          // Try to extract from various possible response structures
+          // If response is a string, try to parse it as JSON
           if (typeof response === 'string') {
-            // If it's a string, use it as the draft
-            console.log('Response is string')
-            draftContent = response
-          } else if (typeof response === 'object' && response !== null) {
-            // Try manager response structure
-            if (response.result?.final_output?.policy_draft) {
+            console.log('Response is string, attempting JSON parse...')
+            try {
+              response = JSON.parse(response)
+              console.log('Successfully parsed string as JSON')
+            } catch (e) {
+              console.log('Could not parse string as JSON, using as-is')
+              draftContent = response
+            }
+          }
+
+          // Now handle object response
+          if (typeof response === 'object' && response !== null && !draftContent) {
+            console.log('Processing object response')
+
+            // Try policy_draft at root level (direct agent response)
+            if (response.policy_draft) {
+              console.log('Found policy_draft at root')
+              const policy = response.policy_draft
+              if (policy.document) {
+                draftContent = policy.document
+              } else if (typeof policy === 'string') {
+                draftContent = policy
+              }
+
+              // Try to get compliance report from root
+              if (!complianceData && response.compliance_report) {
+                complianceData = response.compliance_report
+              }
+            }
+            // Try result.policy_draft structure
+            else if (response.result?.policy_draft) {
+              console.log('Found policy_draft in result')
+              const policy = response.result.policy_draft
+              if (policy.document) {
+                draftContent = policy.document
+              } else if (typeof policy === 'string') {
+                draftContent = policy
+              }
+
+              if (!complianceData && response.result.compliance_report) {
+                complianceData = response.result.compliance_report
+              }
+            }
+            // Try manager response structure (final_output)
+            else if (response.result?.final_output?.policy_draft) {
               console.log('Found policy_draft in result.final_output')
-              draftContent = response.result.final_output.policy_draft
-              if (response.result.final_output.compliance_report) {
+              const policy = response.result.final_output.policy_draft
+              if (policy.document) {
+                draftContent = policy.document
+              } else if (typeof policy === 'string') {
+                draftContent = policy
+              }
+
+              if (!complianceData && response.result.final_output.compliance_report) {
                 complianceData = response.result.final_output.compliance_report
               }
             }
@@ -760,18 +805,9 @@ Please provide:
               console.log('Found aggregated in result.final_output')
               draftContent = response.result.final_output.aggregated
             }
-            // Try direct response fields
-            else if (response.policy_draft) {
-              console.log('Found policy_draft at root level')
-              draftContent = response.policy_draft
-            }
-            else if (response.result?.response) {
-              console.log('Found result.response')
-              draftContent = response.result.response
-            }
             // Try sub-agent results
             else if (response.result?.sub_agent_results && Array.isArray(response.result.sub_agent_results)) {
-              console.log('Found sub_agent_results, count:', response.result.sub_agent_results.length)
+              console.log('Found sub_agent_results')
               const draftResult = response.result.sub_agent_results.find(
                 (r: any) => r.agent_name?.toLowerCase().includes('draft')
               )
@@ -779,34 +815,31 @@ Please provide:
                 (r: any) => r.agent_name?.toLowerCase().includes('compliance')
               )
 
-              console.log('Draft result found:', !!draftResult)
-              console.log('Compliance result found:', !!complianceResult)
-
               if (draftResult?.output) {
                 draftContent = typeof draftResult.output === 'string'
                   ? draftResult.output
-                  : draftResult.output.policy_draft || draftResult.output.draft || JSON.stringify(draftResult.output)
+                  : draftResult.output.document || draftResult.output.policy_draft || JSON.stringify(draftResult.output)
               }
 
               if (complianceResult?.output) {
                 complianceData = complianceResult.output
               }
             }
-            // Try summary field
+            // Try summary
             else if (response.result?.summary) {
               console.log('Found result.summary')
               draftContent = response.result.summary
             }
-            // Fallback: stringify the entire response
+            // Last resort stringify
             else {
-              console.log('No specific field found, stringifying entire response')
+              console.log('No specific field found, stringifying response')
               draftContent = JSON.stringify(response, null, 2)
             }
           }
 
-          // Last resort fallback
+          // Final fallback
           if (!draftContent) {
-            console.log('Using fallback - raw_response or default message')
+            console.log('Using final fallback')
             draftContent = data.raw_response || 'Policy draft has been generated. Please review and refine as needed.'
           }
 
@@ -820,7 +853,6 @@ Please provide:
           setStep('output')
         } catch (parseErr) {
           console.error('Error parsing response:', parseErr)
-          console.error('Data received:', JSON.stringify(data, null, 2).slice(0, 500))
           setError('Failed to parse policy response. Please try again.')
         }
       } else {
@@ -1012,46 +1044,106 @@ Please provide:
                       <h3 className="text-sm font-semibold text-gray-900">Compliance Analysis</h3>
                     </div>
                     <ScrollArea className="flex-1 p-4 space-y-3">
-                      {generatedPolicy.compliance?.result?.findings ? (
-                        <div className="space-y-3">
-                          {generatedPolicy.compliance.result.findings.map((finding, idx) => (
-                            <div
-                              key={idx}
-                              className="p-3 rounded-lg border"
-                              style={{
-                                borderColor:
-                                  finding.severity === 'high'
-                                    ? '#EF4444'
-                                    : finding.severity === 'medium'
-                                    ? '#F59E0B'
-                                    : '#10B981',
-                                backgroundColor:
-                                  finding.severity === 'high'
-                                    ? '#FEE2E2'
-                                    : finding.severity === 'medium'
-                                    ? '#FEF3C7'
-                                    : '#ECFDF5',
-                              }}
-                            >
-                              <div className="flex items-start gap-2">
-                                {finding.severity === 'high' ? (
-                                  <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
-                                ) : finding.severity === 'medium' ? (
-                                  <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                                ) : (
-                                  <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-gray-900">
-                                    {finding.title}
-                                  </p>
-                                  <p className="text-xs text-gray-700 mt-1">
-                                    {finding.description}
-                                  </p>
-                                </div>
-                              </div>
+                      {generatedPolicy.compliance ? (
+                        <div className="space-y-4">
+                          {/* Try different compliance data structures */}
+                          {generatedPolicy.compliance.compliance_issues &&
+                          Array.isArray(generatedPolicy.compliance.compliance_issues) &&
+                          generatedPolicy.compliance.compliance_issues.length > 0 ? (
+                            <div className="space-y-3">
+                              {generatedPolicy.compliance.compliance_issues.map((issue: any, idx: number) => {
+                                const severityColor = issue.severity === 'Critical'
+                                  ? { border: '#EF4444', bg: '#FEE2E2', icon: 'red' }
+                                  : issue.severity === 'Warning'
+                                  ? { border: '#F59E0B', bg: '#FEF3C7', icon: 'amber' }
+                                  : { border: '#10B981', bg: '#ECFDF5', icon: 'green' }
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="p-3 rounded-lg border"
+                                    style={{ borderColor: severityColor.border, backgroundColor: severityColor.bg }}
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      {severityColor.icon === 'red' ? (
+                                        <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                      ) : severityColor.icon === 'amber' ? (
+                                        <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                      ) : (
+                                        <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-gray-900">
+                                          {issue.issue || issue.title}
+                                        </p>
+                                        {issue.jurisdiction && (
+                                          <p className="text-xs text-gray-600 mt-0.5">
+                                            Jurisdiction: {issue.jurisdiction}
+                                          </p>
+                                        )}
+                                        {issue.recommendation && (
+                                          <p className="text-xs text-gray-700 mt-1">
+                                            {issue.recommendation}
+                                          </p>
+                                        )}
+                                        {issue.regulatory_reference && (
+                                          <p className="text-xs text-gray-600 mt-1 italic">
+                                            Ref: {issue.regulatory_reference}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
                             </div>
-                          ))}
+                          ) : generatedPolicy.compliance.result?.findings ? (
+                            <div className="space-y-3">
+                              {generatedPolicy.compliance.result.findings.map((finding: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="p-3 rounded-lg border"
+                                  style={{
+                                    borderColor:
+                                      finding.severity === 'high'
+                                        ? '#EF4444'
+                                        : finding.severity === 'medium'
+                                        ? '#F59E0B'
+                                        : '#10B981',
+                                    backgroundColor:
+                                      finding.severity === 'high'
+                                        ? '#FEE2E2'
+                                        : finding.severity === 'medium'
+                                        ? '#FEF3C7'
+                                        : '#ECFDF5',
+                                  }}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {finding.severity === 'high' ? (
+                                      <AlertTriangle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                                    ) : finding.severity === 'medium' ? (
+                                      <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                    ) : (
+                                      <Info size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-gray-900">
+                                        {finding.title}
+                                      </p>
+                                      <p className="text-xs text-gray-700 mt-1">
+                                        {finding.description}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 mb-2">Compliance Summary</p>
+                              <p className="text-xs text-gray-700">{JSON.stringify(generatedPolicy.compliance, null, 2).slice(0, 200)}</p>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <p className="text-sm text-gray-500">No compliance findings available</p>
