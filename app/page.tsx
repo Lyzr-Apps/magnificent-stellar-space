@@ -727,45 +727,104 @@ Please provide:
 
       const data = await response.json()
 
-      if (data.success && data.response) {
-        const managerResponse = data.response as ManagerResponse
+      console.log('=== FRONTEND API RESPONSE ===')
+      console.log('Success:', data.success)
+      console.log('Response type:', typeof data.response)
+      console.log('Response structure:', JSON.stringify(data.response, null, 2).slice(0, 1000))
 
-        // Extract policy draft and compliance report from the response
-        let draftContent = 'Policy draft generated'
+      if (data.success && data.response) {
+        let draftContent = ''
         let complianceData = null
 
-        if (managerResponse.result?.sub_agent_results) {
-          const draftResult = managerResponse.result.sub_agent_results.find(
-            (r) => r.agent_name?.includes('Drafter') || r.agent_name?.includes('draft')
-          )
-          const complianceResult = managerResponse.result.sub_agent_results.find(
-            (r) => r.agent_name?.includes('Compliance') || r.agent_name?.includes('compliance')
-          )
+        try {
+          // The response can be in multiple formats
+          const response = data.response
+          console.log('Extracting from response...')
 
-          if (draftResult?.output) {
-            draftContent = draftResult.output.policy_draft ||
-                          draftResult.output.draft ||
-                          draftResult.output.content ||
-                          JSON.stringify(draftResult.output)
+          // Try to extract from various possible response structures
+          if (typeof response === 'string') {
+            // If it's a string, use it as the draft
+            console.log('Response is string')
+            draftContent = response
+          } else if (typeof response === 'object' && response !== null) {
+            // Try manager response structure
+            if (response.result?.final_output?.policy_draft) {
+              console.log('Found policy_draft in result.final_output')
+              draftContent = response.result.final_output.policy_draft
+              if (response.result.final_output.compliance_report) {
+                complianceData = response.result.final_output.compliance_report
+              }
+            }
+            // Try aggregated output
+            else if (response.result?.final_output?.aggregated) {
+              console.log('Found aggregated in result.final_output')
+              draftContent = response.result.final_output.aggregated
+            }
+            // Try direct response fields
+            else if (response.policy_draft) {
+              console.log('Found policy_draft at root level')
+              draftContent = response.policy_draft
+            }
+            else if (response.result?.response) {
+              console.log('Found result.response')
+              draftContent = response.result.response
+            }
+            // Try sub-agent results
+            else if (response.result?.sub_agent_results && Array.isArray(response.result.sub_agent_results)) {
+              console.log('Found sub_agent_results, count:', response.result.sub_agent_results.length)
+              const draftResult = response.result.sub_agent_results.find(
+                (r: any) => r.agent_name?.toLowerCase().includes('draft')
+              )
+              const complianceResult = response.result.sub_agent_results.find(
+                (r: any) => r.agent_name?.toLowerCase().includes('compliance')
+              )
+
+              console.log('Draft result found:', !!draftResult)
+              console.log('Compliance result found:', !!complianceResult)
+
+              if (draftResult?.output) {
+                draftContent = typeof draftResult.output === 'string'
+                  ? draftResult.output
+                  : draftResult.output.policy_draft || draftResult.output.draft || JSON.stringify(draftResult.output)
+              }
+
+              if (complianceResult?.output) {
+                complianceData = complianceResult.output
+              }
+            }
+            // Try summary field
+            else if (response.result?.summary) {
+              console.log('Found result.summary')
+              draftContent = response.result.summary
+            }
+            // Fallback: stringify the entire response
+            else {
+              console.log('No specific field found, stringifying entire response')
+              draftContent = JSON.stringify(response, null, 2)
+            }
           }
 
-          if (complianceResult?.output) {
-            complianceData = complianceResult.output
+          // Last resort fallback
+          if (!draftContent) {
+            console.log('Using fallback - raw_response or default message')
+            draftContent = data.raw_response || 'Policy draft has been generated. Please review and refine as needed.'
           }
-        }
 
-        // Fallback: try to extract from raw response
-        if (!draftContent || draftContent === 'Policy draft generated') {
-          draftContent = data.raw_response || 'Policy draft has been generated'
-        }
+          console.log('Final draft content length:', draftContent.length)
+          console.log('Compliance data available:', !!complianceData)
 
-        setGeneratedPolicy({
-          draft: draftContent,
-          compliance: complianceData,
-        })
-        setStep('output')
+          setGeneratedPolicy({
+            draft: draftContent,
+            compliance: complianceData,
+          })
+          setStep('output')
+        } catch (parseErr) {
+          console.error('Error parsing response:', parseErr)
+          console.error('Data received:', JSON.stringify(data, null, 2).slice(0, 500))
+          setError('Failed to parse policy response. Please try again.')
+        }
       } else {
-        setError('Failed to generate policy. Please try again.')
+        setError(data.error || 'Failed to generate policy. Please try again.')
       }
     } catch (err) {
       setError('An error occurred. Please try again.')

@@ -130,6 +130,9 @@ export async function POST(request: NextRequest) {
     if (response.ok) {
       const data = await response.json()
 
+      console.log('=== AGENT API RESPONSE ===')
+      console.log('Raw response structure:', JSON.stringify(data, null, 2))
+
       // BULLETPROOF JSON PARSING with multiple strategies
       let parsedResponse = data.response
 
@@ -218,7 +221,7 @@ export async function POST(request: NextRequest) {
         parsedResponse.raw_response = data.response
       }
 
-      return NextResponse.json({
+      const finalResponse = {
         success: true,
         response: parsedResponse, // ✅ Bulletproof parsed response (includes raw_response on parse failure)
         raw_response: data.response, // Keep original for debugging
@@ -235,7 +238,14 @@ export async function POST(request: NextRequest) {
           (parsedResponse?.data) ||
           (typeof data.response === 'string' && data.response.length > 0)
         ),
-      })
+      }
+
+      console.log('=== FINAL PARSED RESPONSE ===')
+      console.log('Parsed response type:', typeof parsedResponse)
+      console.log('Parsed response structure:', JSON.stringify(parsedResponse, null, 2).slice(0, 500))
+      console.log('Parse succeeded:', parseSucceeded)
+
+      return NextResponse.json(finalResponse)
     } else {
       const errorText = await response.text()
       return NextResponse.json(
