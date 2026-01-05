@@ -131,119 +131,78 @@ export async function POST(request: NextRequest) {
       const data = await response.json()
 
       console.log('=== AGENT API RESPONSE ===')
-      console.log('Raw response structure:', JSON.stringify(data, null, 2))
+      console.log('Response field type:', typeof data.response)
+      console.log('Response field sample:', typeof data.response === 'string' ? data.response.slice(0, 100) : JSON.stringify(data.response).slice(0, 100))
 
-      // BULLETPROOF JSON PARSING with multiple strategies
-      let parsedResponse = data.response
+      // CRITICAL FIX: If response is a string containing JSON, parse it FIRST
+      let rawResponse = data.response
 
-      if (typeof data.response === 'string') {
+      // Step 1: Handle string responses that contain JSON
+      if (typeof rawResponse === 'string') {
+        console.log('Response is string, attempting to parse...')
+
+        // Clean up the string
+        let cleaned = rawResponse
+        cleaned = cleaned.replace(/\\n/g, '\n')
+        cleaned = cleaned.replace(/\\r/g, '\r')
+        cleaned = cleaned.replace(/\\t/g, '\t')
+        cleaned = cleaned.replace(/^```(?:json|JSON)?\s*\n?/gm, '')
+        cleaned = cleaned.replace(/\n?```\s*$/gm, '')
+        cleaned = cleaned.trim()
+
+        // Try to parse the cleaned string
         try {
-          // STRATEGY 1: Clean up common LLM response issues
-          let cleaned = data.response
-
-          // Remove literal \n, \r, \t escape sequences (not actual newlines!)
-          cleaned = cleaned.replace(/\\n/g, '\n')
-          cleaned = cleaned.replace(/\\r/g, '\r')
-          cleaned = cleaned.replace(/\\t/g, '\t')
-
-          // Remove markdown code blocks (```json, ```, etc.)
-          cleaned = cleaned.replace(/^```(?:json|JSON)?\s*\n?/gm, '')
-          cleaned = cleaned.replace(/\n?```\s*$/gm, '')
-
-          // Trim whitespace
-          cleaned = cleaned.trim()
-
-          // STRATEGY 2: Try direct JSON.parse first (fastest)
-          try {
-            const directParse = JSON.parse(cleaned)
-            if (directParse && typeof directParse === 'object') {
-              parsedResponse = directParse
-              console.log('✅ Direct JSON.parse succeeded')
-            }
-          } catch (directError) {
-            // STRATEGY 3: Use advanced parseLLMJson for complex cases
-            console.log('⚙️ Trying advanced parseLLMJson...')
-            const parsed = parseLLMJson(cleaned, {
-              attemptFix: true,
-              maxBlocks: 5,
-              preferFirst: true,
-              allowPartial: false
-            })
-
-            if (parsed && typeof parsed === 'object') {
-              parsedResponse = parsed
-              console.log('✅ parseLLMJson succeeded')
-            } else {
-              // STRATEGY 4: Try extracting JSON from anywhere in the string
-              const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
-              if (jsonMatch) {
-                try {
-                  const extracted = JSON.parse(jsonMatch[0])
-                  if (extracted && typeof extracted === 'object') {
-                    parsedResponse = extracted
-                    console.log('✅ JSON extraction succeeded')
-                  }
-                } catch (extractError) {
-                  // STRATEGY 5: Last resort - use parseLLMJson on extracted portion
-                  const lastResort = parseLLMJson(jsonMatch[0], { attemptFix: true })
-                  if (lastResort && typeof lastResort === 'object') {
-                    parsedResponse = lastResort
-                    console.log('✅ Last resort parsing succeeded')
-                  } else {
-                    console.log('ℹ️ All parsing strategies failed, keeping original response')
-                  }
-                }
-              } else {
-                console.log('ℹ️ No JSON found in response, keeping as-is')
-              }
-            }
+          const parsed = JSON.parse(cleaned)
+          if (parsed && typeof parsed === 'object') {
+            console.log('SUCCESS: Parsed string as JSON')
+            rawResponse = parsed
           }
-        } catch (e) {
-          console.error('Error during JSON parsing:', e)
-          // Keep original response on any error
+        } catch (parseErr) {
+          console.log('FAILED: Could not parse string as JSON', parseErr)
+          // Keep as string if parsing fails
         }
-      } else if (typeof data.response === 'object' && data.response !== null) {
-        // Already an object, use as-is
-        parsedResponse = data.response
-        console.log('✅ Response already an object')
       }
 
-      // Detect if parsing actually failed (response contains error about parsing)
-      const parseSucceeded = !(
-        parsedResponse &&
-        typeof parsedResponse === 'object' &&
-        parsedResponse.success === false &&
-        (parsedResponse.error?.includes('JSON') || parsedResponse.error?.includes('parse'))
-      )
+      // Step 2: Now we either have an object or a string - extract response
+      let parsedResponse = rawResponse
 
-      // If parsing failed, add raw_response inside it too
-      if (!parseSucceeded && parsedResponse && typeof parsedResponse === 'object') {
-        parsedResponse.raw_response = data.response
+      // Step 3: If it's now an object, try to unwrap it if it's nested
+      if (typeof parsedResponse === 'object' && parsedResponse !== null) {
+        console.log('Working with object response')
+
+        // Check if there's a deeply nested structure that needs unwrapping
+        if (parsedResponse.status === 'success' && parsedResponse.result) {
+          console.log('Found status:success with result field - this is the actual response')
+          // Already in the right format, keep it
+        } else if (parsedResponse.response && typeof parsedResponse.response === 'string') {
+          // This shouldn't happen but handle it
+          try {
+            const innerParsed = JSON.parse(parsedResponse.response)
+            if (innerParsed && typeof innerParsed === 'object') {
+              console.log('Unwrapped nested response field')
+              parsedResponse = innerParsed
+            }
+          } catch (e) {
+            // Keep as is
+          }
+        }
       }
 
       const finalResponse = {
         success: true,
-        response: parsedResponse, // ✅ Bulletproof parsed response (includes raw_response on parse failure)
-        raw_response: data.response, // Keep original for debugging
+        response: parsedResponse,
+        raw_response: data.response,
         agent_id,
         user_id,
         session_id,
         timestamp: new Date().toISOString(),
-        // Meta fields for auto-fix detection
-        _parse_succeeded: parseSucceeded,
-        _has_valid_data: !!(
-          (parsedResponse?.result) ||
-          (parsedResponse?.answer) ||
-          (parsedResponse?.message) ||
-          (parsedResponse?.data) ||
-          (typeof data.response === 'string' && data.response.length > 0)
-        ),
       }
 
-      console.log('=== FINAL PARSED RESPONSE ===')
-      console.log('Parsed response type:', typeof parsedResponse)
-      console.log('Parsed response structure:', JSON.stringify(parsedResponse, null, 2).slice(0, 500))
-      console.log('Parse succeeded:', parseSucceeded)
+      console.log('=== FINAL RESPONSE ===')
+      console.log('Response type:', typeof parsedResponse)
+      console.log('Has result field:', !!parsedResponse?.result)
+      console.log('Has policy_draft:', !!parsedResponse?.result?.policy_draft)
+      console.log('Response summary:', JSON.stringify(parsedResponse, null, 2).slice(0, 300))
 
       return NextResponse.json(finalResponse)
     } else {
